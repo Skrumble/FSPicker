@@ -224,8 +224,7 @@ static NSString *const fsAuthURL = @"%@/api/client/%@/auth/open?m=*/*&key=%@&id=
     }
 
     // discovers endpoints
-    [OIDAuthorizationService discoverServiceConfigurationForIssuer:issuer
-                                                        completion:^(OIDServiceConfiguration *_Nullable configuration, NSError *_Nullable error) {
+    [OIDAuthorizationService discoverServiceConfigurationForIssuer:issuer completion:^(OIDServiceConfiguration *_Nullable configuration, NSError *_Nullable error) {
         if (!configuration) {
             [self logMessage:@"Error retrieving discovery document: %@", [error localizedDescription]];
             [self notifyDelegateAboutAuthenticationResponse];
@@ -240,35 +239,31 @@ static NSString *const fsAuthURL = @"%@/api/client/%@/auth/open?m=*/*&key=%@&id=
         redirectURI = [redirectURI stringByAppendingString:@":/oauthredirect"];
 
         NSString* clientId = [FSGoogleServicesManager shared].clientId;
+                                                            
+        if (clientId == nil || clientId.length == 0) {
+            [self notifyDelegateAboutAuthenticationResponse];
+            return;
+        }
 
-        OIDAuthorizationRequest *request =
-        [[OIDAuthorizationRequest alloc] initWithConfiguration:configuration
-                                                      clientId:clientId
-                                                        scopes:scopes
-                                                   redirectURL:[NSURL URLWithString:redirectURI]
-                                                  responseType:OIDResponseTypeCode
-                                          additionalParameters:nil];
+        OIDAuthorizationRequest *request = [[OIDAuthorizationRequest alloc] initWithConfiguration:configuration clientId:clientId scopes:scopes redirectURL:[NSURL URLWithString:redirectURI] responseType:OIDResponseTypeCode additionalParameters:nil];
 
         // Performs authentication request
         [self logMessage:@"Initiating authorization request with scope: %@", request.scope];
 
-        [FSGoogleServicesManager shared].currentAuthorizationFlow =
-        [OIDAuthState authStateByPresentingAuthorizationRequest:request
-                                       presentingViewController:self
-                                                       callback:^(OIDAuthState *_Nullable authState,
-                                                                  NSError *_Nullable error) {
-           if (authState) {
-               GTMAppAuthFetcherAuthorization *authorization =
-               [[GTMAppAuthFetcherAuthorization alloc] initWithAuthState:authState];
-
-               if (error == nil) {
-                   // Serialize to Keychain
-                   [self createServiceWith:authorization];
-               }else{
-                   [self logMessage:@"Authorization error: %@", [error localizedDescription]];
-                   [self notifyDelegateAboutAuthenticationResponse];
-               }
-           } else {
+        [FSGoogleServicesManager shared].currentAuthorizationFlow = [OIDAuthState authStateByPresentingAuthorizationRequest:request presentingViewController:self callback:^(OIDAuthState *_Nullable authState, NSError *_Nullable error) {
+            
+            if (authState == nil) {
+                [self logMessage:@"Authorization error: %@", [error localizedDescription]];
+                [self notifyDelegateAboutAuthenticationResponse];
+            }
+            
+           GTMAppAuthFetcherAuthorization *authorization = [[GTMAppAuthFetcherAuthorization alloc] initWithAuthState:authState];
+            
+           if (error == nil) {
+               // Serialize to Keychain
+               [self createServiceWith:authorization];
+           }
+           else {
                [self logMessage:@"Authorization error: %@", [error localizedDescription]];
                [self notifyDelegateAboutAuthenticationResponse];
            }
