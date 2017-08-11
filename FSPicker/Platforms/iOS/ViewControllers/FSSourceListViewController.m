@@ -6,6 +6,9 @@
 //  Copyright © 2016 Filestack. All rights reserved.
 //
 
+#import <Photos/Photos.h>
+#import <AVFoundation/AVFoundation.h>
+
 #import "FSConfig.h"
 #import "FSSource.h"
 #import "FSConfig+Private.h"
@@ -20,6 +23,8 @@
 #import "FSSourceListViewController.h"
 #import "FSSaveSourceViewController.h"
 #import "FSProgressModalViewController.h"
+
+#import "Skrumble-Swift.h"
 
 @interface FSSourceListViewController () <UIImagePickerControllerDelegate, UINavigationControllerDelegate>
 
@@ -180,14 +185,27 @@
 
 - (void)cameraRollSourceSelected:(FSSource *)source atIndexPath:(NSIndexPath *)indexPath {
     if (self.inPickMode) {
+        PHAuthorizationStatus status = [PHPhotoLibrary authorizationStatus];
         FSAlbumsViewController *destinationController = [[FSAlbumsViewController alloc] initWithConfig:self.config source:source];
-        [self.navigationController pushViewController:destinationController animated:YES];
+        if(status == PHAuthorizationStatusAuthorized){
+            
+            [self.navigationController pushViewController:destinationController animated:YES];
+            
+        } else {
+            [DevicePermission checkPhotoAlbumPermission:self completion:^(BOOL permission) {
+                if( permission ){
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        [self.navigationController pushViewController:destinationController animated:YES];
+                    });
+                }
+            }];
+        }
     } else {
         FSExporter *exporter = [[FSExporter alloc] initWithConfig:self.config];
         exporter.exporterDelegate = (FSSaveController *)self.navigationController;
         [exporter saveDataToCameraRoll];
-        [self.tableView deselectRowAtIndexPath:indexPath animated:YES];
     }
+    [self.tableView deselectRowAtIndexPath:indexPath animated:YES];
 }
 
 #pragma mark - UIImagePickerController
@@ -200,23 +218,36 @@
         }];
         return;
     }
-
+    
+    NSString *mediaType = AVMediaTypeVideo;
+    AVAuthorizationStatus authStatus = [AVCaptureDevice authorizationStatusForMediaType:mediaType];
+    if(authStatus == AVAuthorizationStatusAuthorized){
+        [self openCameraController];
+    } else {
+        [DevicePermission checkCameraPermission:self completion:^(BOOL permission) {
+            if (permission) {
+                [self openCameraController];
+            }
+        }];
+    }
+    [self.tableView deselectRowAtIndexPath:indexPath animated:YES];
+}
+- (void)openCameraController {
     UIImagePickerController *pickerController = [[UIImagePickerController alloc] init];
-
+    
     pickerController.sourceType = UIImagePickerControllerSourceTypeCamera;
     pickerController.mediaTypes = [self imagePickerMediaTypes];
     pickerController.allowsEditing = NO;
     pickerController.delegate = self;
-
+    
     if (self.config.defaultToFrontCamera) {
         pickerController.cameraDevice = UIImagePickerControllerCameraDeviceFront;
     }
-
+    
     dispatch_async(dispatch_get_main_queue(), ^{
         [self presentViewController:pickerController animated:YES completion:nil];
     });
 }
-
 - (NSArray *)imagePickerMediaTypes {
     NSMutableArray *mediaTypes = [[NSMutableArray alloc] init];
 
