@@ -141,13 +141,15 @@
             [self.uploadModalDelegate fsUploadProgress:uploadProgress.fractionCompleted addToTotalProgress:NO];
         }
     } completionHandler:^(FSBlob *blob, NSError *error) {
-        [self messageDelegateWithBlob:blob error:error];
+        // This line is useless
+        // delegate method are called twice
+//        [self messageDelegateWithBlob:blob error:error];
 
         if (blob) {
             [self messageDelegateLocalUploadFinished];
-        } else {
-            [self messageDelegateWithBlob:nil error:error];
         }
+        // make sure to send it
+        [self messageDelegateWithBlob:blob error:error];
 
         if (delegateRespondsToUploadProgress) {
             [self.uploadModalDelegate fsUploadProgress:1.0 addToTotalProgress:NO];
@@ -284,12 +286,15 @@
             [self.pickerDelegate fsUploadComplete:blob];
         }
     } else {
-        if ([self.uploadModalDelegate respondsToSelector:@selector(fsUploadError:)]) {
-            [self.uploadModalDelegate fsUploadError:error];
-        }
-
-        if ([self.pickerDelegate respondsToSelector:@selector(fsUploadError:)]) {
-            [self.pickerDelegate fsUploadError:error];
+        // make sure that the loader is dismiss before calling the picker delegate
+        // this way the delegate can present
+        typeof(self) weakSelf = self;
+        if ([self.uploadModalDelegate respondsToSelector:@selector(fsUploadError:withCompletion:)]) {
+            [self.uploadModalDelegate fsUploadError:error withCompletion:^{
+                if ([weakSelf.pickerDelegate respondsToSelector:@selector(fsUploadError:)]) {
+                    [weakSelf.pickerDelegate fsUploadError:error];
+                }
+            }];
         }
     }
 }

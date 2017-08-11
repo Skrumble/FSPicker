@@ -105,8 +105,12 @@
 }
 
 - (void)fsUploadError:(NSError *)error {
+    [self fsUploadError:error withCompletion:nil];
+}
+
+- (void)fsUploadError:(NSError *)error withCompletion:(void(^)(void))completion {
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self dismissViewControllerAnimated:YES completion:nil];
+        [self dismissViewControllerAnimated:YES completion:completion];
     });
 }
 
