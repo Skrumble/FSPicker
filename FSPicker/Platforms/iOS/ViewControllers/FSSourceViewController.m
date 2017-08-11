@@ -338,13 +338,16 @@
     [self presentViewController:logoutAlert animated:YES completion:nil];
 
     [Filestack logoutFromSource:self.source.identifier externalDomains:self.source.externalDomains parameters:parameters completionHandler:^(NSError *error) {
-        [logoutAlert dismissViewControllerAnimated:YES completion:nil];
-        if (error) {
-            [self enableUI];
-            [self showAlertWithError:error];
-        } else {
-            [self.navigationController popViewControllerAnimated:YES];
-        }
+        [logoutAlert dismissViewControllerAnimated:YES completion:^{
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (error) {
+                    [self enableUI];
+                    [self showAlertWithError:error];
+                    return;
+                }
+                [self.navigationController popViewControllerAnimated:YES];
+            });
+        }];
     }];
 }
 
