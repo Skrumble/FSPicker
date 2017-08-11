@@ -79,10 +79,13 @@
 - (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section {
     return self.assetsFetchResult.count;
 }
+- (NSInteger)getReversedIndexPathRow:(NSIndexPath *)indexPath {
+    return (self.assetsFetchResult.count-1) - indexPath.row;
+}
 
 - (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath {
     FSCollectionViewCell *cell = [collectionView dequeueReusableCellWithReuseIdentifier:@"fsCell" forIndexPath:indexPath];
-    PHAsset *asset = self.assetsFetchResult[indexPath.row];
+    PHAsset *asset = self.assetsFetchResult[ [self getReversedIndexPathRow:indexPath] ];
 
     if ([self.selectedIndexPaths containsObject:indexPath]) {
         [self markCellAsSelected:cell atIndexPath:indexPath];
@@ -106,7 +109,7 @@
 - (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     FSCollectionViewCell *cell = (FSCollectionViewCell *)[collectionView cellForItemAtIndexPath:indexPath];
     [self markCellAsSelected:cell atIndexPath:indexPath];
-    [self.selectedAssets addObject:self.assetsFetchResult[indexPath.row]];
+    [self.selectedAssets addObject:self.assetsFetchResult[ [self getReversedIndexPathRow:indexPath] ]];
     [self.selectedIndexPaths addObject:indexPath];
 
     if (self.config.selectMultiple) {
@@ -119,7 +122,7 @@
 - (void)collectionView:(UICollectionView *)collectionView didDeselectItemAtIndexPath:(NSIndexPath *)indexPath {
     FSCollectionViewCell *cell = (FSCollectionViewCell *)[collectionView cellForItemAtIndexPath:indexPath];
     cell.overlayImageView.image = nil;
-    [self.selectedAssets removeObject:self.assetsFetchResult[indexPath.row]];
+    [self.selectedAssets removeObject:self.assetsFetchResult[ [self getReversedIndexPathRow:indexPath] ]];
     [self.selectedIndexPaths removeObject:indexPath];
     [self updateToolbar];
 }
