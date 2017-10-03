@@ -171,7 +171,7 @@
 
     storeOptions.mimeType = nil;
 
-    PHVideoRequestOptions *options=[[PHVideoRequestOptions alloc] init];
+    PHVideoRequestOptions *options = [[PHVideoRequestOptions alloc] init];
     options.version = PHVideoRequestOptionsVersionOriginal;
 
     for (PHAsset *item in items) {
@@ -220,7 +220,10 @@
                      progress:(void (^)(NSProgress *uploadProgress))progress
             completionHandler:(void (^)(FSBlob *blob, NSError *error))completionHandler {
 
-    [[PHImageManager defaultManager] requestImageDataForAsset:asset options:nil resultHandler:^(NSData * imageData, NSString * dataUTI, UIImageOrientation orientation, NSDictionary * info) {
+    PHImageRequestOptions *option = [[PHImageRequestOptions alloc] init];
+    option.networkAccessAllowed = YES;
+    
+    [[PHImageManager defaultManager] requestImageDataForAsset:asset options:option resultHandler:^(NSData * imageData, NSString * dataUTI, UIImageOrientation orientation, NSDictionary * info) {
         NSURL *imageURL = info[@"PHImageFileURLKey"];
         NSString *fileName = imageURL.lastPathComponent;
         storeOptions.fileName = fileName;
@@ -239,22 +242,26 @@
                      progress:(void (^)(NSProgress *uploadProgress))progress
             completionHandler:(void (^)(FSBlob *blob, NSError *error))completionHandler {
 
-    PHVideoRequestOptions *options=[[PHVideoRequestOptions alloc] init];
+    PHVideoRequestOptions *options = [[PHVideoRequestOptions alloc] init];
     options.version = PHVideoRequestOptionsVersionOriginal;
+    options.networkAccessAllowed = YES;
 
     [[PHImageManager defaultManager] requestAVAssetForVideo:asset options:options resultHandler:^(AVAsset *asset, AVAudioMix *audioMix, NSDictionary *info) {
-        if ([asset isKindOfClass:[AVURLAsset class]]) {
-            NSURL *URL = ((AVURLAsset *)asset).URL;
-            NSData *data = [NSData dataWithContentsOfURL:URL];
-            NSString *fileName = URL.lastPathComponent;
-            storeOptions.fileName = fileName;
-
-            [filestack store:data withOptions:storeOptions progress:^(NSProgress *uploadProgress) {
-                progress(uploadProgress);
-            } completionHandler:^(FSBlob *blob, NSError *error) {
-                completionHandler(blob, error);
-            }];
+        if ([asset isKindOfClass:[AVURLAsset class]] == NO) {
+            if (completionHandler) { completionHandler(nil, nil); }
+            return;
         }
+            
+        NSURL *URL = ((AVURLAsset *)asset).URL;
+        NSData *data = [NSData dataWithContentsOfURL:URL];
+        NSString *fileName = URL.lastPathComponent;
+        storeOptions.fileName = fileName;
+
+        [filestack store:data withOptions:storeOptions progress:^(NSProgress *uploadProgress) {
+            progress(uploadProgress);
+        } completionHandler:^(FSBlob *blob, NSError *error) {
+            completionHandler(blob, error);
+        }];
     }];
 }
 
