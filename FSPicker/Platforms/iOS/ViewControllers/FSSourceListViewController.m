@@ -264,16 +264,24 @@
 
 - (void)imagePickerController:(UIImagePickerController *)picker didFinishPickingMediaWithInfo:(NSDictionary<NSString *,id> *)info {
     [picker dismissViewControllerAnimated:YES completion:^{
-        FSProgressModalViewController *uploadModal = [[FSProgressModalViewController alloc] init];
-        uploadModal.modalPresentationStyle = UIModalPresentationOverCurrentContext;
-
-        FSUploader *uploader = [[FSUploader alloc] initWithConfig:self.config source:nil];
-        uploader.uploadModalDelegate = uploadModal;
-        uploader.pickerDelegate = (FSPickerController *)self.navigationController;
-
-        [self presentViewController:uploadModal animated:YES completion:nil];
-
-        [uploader uploadCameraItemWithInfo:info];
+        if(self.config.shouldUpload == YES) {
+            FSProgressModalViewController *uploadModal = [[FSProgressModalViewController alloc] init];
+            uploadModal.modalPresentationStyle = UIModalPresentationOverCurrentContext;
+            
+            FSUploader *uploader = [[FSUploader alloc] initWithConfig:self.config source:nil];
+            uploader.uploadModalDelegate = uploadModal;
+            uploader.pickerDelegate = (FSPickerController *)self.navigationController;
+            
+            [self presentViewController:uploadModal animated:YES completion:nil];
+            
+            [uploader uploadCameraItemWithInfo:info];
+        } else {
+            UIImage *image = [info objectForKey:UIImagePickerControllerOriginalImage];
+            if( [((FSPickerController *)self.navigationController) respondsToSelector:@selector(fsImageSelected:withURL:)] ){
+                [((FSPickerController *)self.navigationController) fsImageSelected:image withURL:nil];
+            }
+        }
+        
     }];
 }
 

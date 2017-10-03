@@ -136,16 +136,36 @@
 #pragma mark - Upload
 
 - (void)uploadSelectedAssets {
-    FSProgressModalViewController *uploadModal = [[FSProgressModalViewController alloc] init];
-    uploadModal.modalPresentationStyle = UIModalPresentationOverCurrentContext;
-
-    FSUploader *uploader = [[FSUploader alloc] initWithConfig:self.config source:self.source];
-    uploader.uploadModalDelegate = uploadModal;
-    uploader.pickerDelegate = (FSPickerController *)self.navigationController;
-
-    [self presentViewController:uploadModal animated:YES completion:nil];
-    [uploader uploadLocalItems:self.selectedAssets];
-    [self clearSelectedAssets];
+    if(self.config.shouldUpload) {
+        FSProgressModalViewController *uploadModal = [[FSProgressModalViewController alloc] init];
+        uploadModal.modalPresentationStyle = UIModalPresentationOverCurrentContext;
+        
+        FSUploader *uploader = [[FSUploader alloc] initWithConfig:self.config source:self.source];
+        uploader.uploadModalDelegate = uploadModal;
+        uploader.pickerDelegate = (FSPickerController *)self.navigationController;
+        
+        [self presentViewController:uploadModal animated:YES completion:nil];
+        [uploader uploadLocalItems:self.selectedAssets];
+        [self clearSelectedAssets];
+    } else {
+        PHAsset *asset = self.selectedAssets.firstObject;
+        PHImageRequestOptions *requestOptions = [[PHImageRequestOptions alloc] init];
+        requestOptions.resizeMode   = PHImageRequestOptionsResizeModeExact;
+        requestOptions.deliveryMode = PHImageRequestOptionsDeliveryModeHighQualityFormat;
+        requestOptions.synchronous = true;
+        
+        PHImageManager *manager = [PHImageManager defaultManager];
+        [manager requestImageForAsset:asset
+                           targetSize:PHImageManagerMaximumSize
+                          contentMode:PHImageContentModeDefault
+                              options:requestOptions
+                        resultHandler:^void(UIImage *image, NSDictionary *info) {
+                            if( [((FSPickerController *)self.navigationController) respondsToSelector:@selector(fsImageSelected:withURL:)] ){
+                                NSURL *url = (NSURL *)[info objectForKey:@"PHImageFileURLKey"];
+                                [((FSPickerController *)self.navigationController) fsImageSelected:image withURL:url];
+                            }
+                        }];
+    }
 }
 
 - (void)clearSelectedAssets {
