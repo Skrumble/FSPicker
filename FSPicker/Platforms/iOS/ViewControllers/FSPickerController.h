@@ -22,4 +22,6 @@
 
 - (void)didCancel;
 
++ (FSPickerController *)getCurrentFSPickerControllerDisplayed;
+
 @end

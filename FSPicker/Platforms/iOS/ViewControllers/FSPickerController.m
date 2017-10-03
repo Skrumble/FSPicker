@@ -14,7 +14,14 @@
 @interface FSPickerController () <FSUploaderDelegate>
 
 @end
+
+static __weak FSPickerController *currentFSPickerController;
+
 @implementation FSPickerController
+
++ (FSPickerController *)getCurrentFSPickerControllerDisplayed {
+    return currentFSPickerController;
+}
 
 - (instancetype)initWithConfig:(FSConfig *)config theme:(FSTheme *)theme {
     if ((self = [super initWithRootViewController:[[FSSourceListViewController alloc] initWithConfig:config]])) {
@@ -41,6 +48,8 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    
+    currentFSPickerController = self;
 }
 
 - (void)didReceiveMemoryWarning {
@@ -59,6 +68,14 @@
     dispatch_async(dispatch_get_main_queue(), ^{
         if ([self.fsDelegate respondsToSelector:@selector(fsPicker:pickedMediaWithBlob:)]) {
             [self.fsDelegate fsPicker:self pickedMediaWithBlob:blob];
+        }
+    });
+}
+
+- (void)fsImageSelected:(UIImage *)asset withURL:(NSURL *)url {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if ([self.fsDelegate respondsToSelector:@selector(fsPicker:didFinishPickingWithUIImage:withURL:)]) {
+            [self.fsDelegate fsPicker:self didFinishPickingWithUIImage:asset withURL:url];
         }
     });
 }
