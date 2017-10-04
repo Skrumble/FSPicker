@@ -95,7 +95,7 @@
     if (collectionTotalCount > 0) {
         cell.textLabel.text = collection.localizedTitle;
         cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu", (unsigned long)collectionTotalCount];
-        PHAsset *asset = assetsFetchResult[0];
+        PHAsset *asset = assetsFetchResult[collectionTotalCount-1];
         [FSImageFetcher imageForAsset:asset
               withCachingImageManager:self.cachingImageManager
                             thumbSize:self.thumbSize
