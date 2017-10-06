@@ -69,10 +69,10 @@
     self.navigationItem.backBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Back" style:UIBarButtonItemStylePlain target:nil action:nil];
 
     if (self.inListView) {
-        [self addTableViewController];
+        [self fsAddChildViewController:self.tableViewController];
         self.tableViewController.alreadyDisplayed = YES;
     } else {
-        [self addCollectionViewController];
+        [self fsAddChildViewController:self.collectionViewController];
         self.collectionViewController.alreadyDisplayed = YES;
     }
 
@@ -110,20 +110,11 @@
     }
 
     if (self.selectedContent.count > 0) {
-        [self updateListAndGridInsetsForToolbarHidden:NO];
         [self.navigationController setToolbarHidden:NO animated:YES];
         [self updateToolbarButtonTitle];
     } else {
-        [self updateListAndGridInsetsForToolbarHidden:YES];
         [self.navigationController setToolbarHidden:YES animated:YES];
     }
-}
-
-- (void)updateListAndGridInsetsForToolbarHidden:(BOOL)hidden {
-    CGFloat toolbarHeight = self.navigationController.toolbar.frame.size.height;
-    BOOL currentlyHidden = self.navigationController.toolbar.isHidden;
-    [self.tableViewController updateTableInsetsForToolbarHidden:hidden currentlyHidden:currentlyHidden toolbarHeight:toolbarHeight];
-    [self.collectionViewController updateCollectionInsetsForToolbarHidden:hidden currentlyHidden:currentlyHidden toolbarHeight:toolbarHeight];
 }
 
 - (void)updateToolbarButtonTitle {
@@ -164,27 +155,12 @@
     self.activityIndicator = [[FSActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhite inViewController:self];
 }
 
-- (void)addTableViewController {
-    [self fsAddChildViewController:self.tableViewController];
-}
-
-- (void)addCollectionViewController {
-    [self fsAddChildViewController:self.collectionViewController];
-}
-
 - (void)setupListGridSwitchButton {
     UIImage *listGridImage = [self imageForViewType];
     UIImage *logoutImage = [FSImage iconNamed:@"icon-logout"];
 
-    UIBarButtonItem *listGridButton = [[UIBarButtonItem alloc] initWithImage:listGridImage
-                                                                       style:UIBarButtonItemStylePlain
-                                                                      target:self
-                                                                      action:@selector(listGridSwitch:)];
-
-    UIBarButtonItem *logoutButton = [[UIBarButtonItem alloc] initWithImage:logoutImage
-                                                                     style:UIBarButtonItemStylePlain
-                                                                    target:self
-                                                                    action:@selector(logout)];
+    UIBarButtonItem *listGridButton = [[UIBarButtonItem alloc] initWithImage:listGridImage style:UIBarButtonItemStylePlain target:self action:@selector(listGridSwitch:)];
+    UIBarButtonItem *logoutButton = [[UIBarButtonItem alloc] initWithImage:logoutImage style:UIBarButtonItemStylePlain target:self action:@selector(logout)];
 
     self.navigationItem.rightBarButtonItems = @[logoutButton, listGridButton];
 }
@@ -258,6 +234,71 @@
     [self.navigationController pushViewController:directoryController animated:YES];
 }
 
+#pragma mark - User Action
+
+- (void)logout {
+    NSString *message = @"Are you sure you want to log out?";
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Logout" message:message preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertAction *confirmAction = [UIAlertAction actionWithTitle:@"Log out" style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
+        [self performLogout];
+    }];
+    UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+    }];
+    [alert addAction:confirmAction];
+    [alert addAction:cancelAction];
+    
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)listGridSwitch:(UIBarButtonItem *)sender {
+    if (self.inListView) {
+        self.inListView = NO;
+        sender.image = [self imageForViewType];
+        [self fsRemoveChildViewController:self.tableViewController];
+        [self fsAddChildViewController:self.collectionViewController];
+    } else {
+        self.inListView = YES;
+        sender.image = [self imageForViewType];
+        [self fsRemoveChildViewController:self.collectionViewController];
+        [self fsAddChildViewController:self.tableViewController];
+    }
+}
+
+#pragma mark - View Helper
+
+- (void)fsRemoveChildViewController:(UIViewController *)childViewController {
+    [childViewController willMoveToParentViewController:nil];
+    [childViewController.view removeFromSuperview];
+    [childViewController removeFromParentViewController];
+}
+
+- (void)fsAddChildViewController:(UIViewController *)childViewController {
+    [self addChildViewController:childViewController];
+    
+    // Setup the constraints for the child view
+    // this way no need to care about the table or collection insets
+    [childViewController.view setTranslatesAutoresizingMaskIntoConstraints:NO];
+    [self.view addSubview:childViewController.view];
+    
+    UIEdgeInsets insets = UIEdgeInsetsMake(64, 0, 0, 0);
+    //
+    if ([[[UIDevice currentDevice] systemVersion] compare:@"11.0" options:NSNumericSearch] != NSOrderedAscending) {
+        insets = UIEdgeInsetsMake(0, 0, 0, 0);
+    }
+    NSDictionary *dict = @{@"v": childViewController.view};
+    NSMutableArray *constraintStringArray = [NSMutableArray array];
+    [constraintStringArray addObject:[NSString stringWithFormat:@"H:|-%f-[v]-%f-|", insets.left, insets.right]];
+    [constraintStringArray addObject:[NSString stringWithFormat:@"V:|-%f-[v]-%f-|", insets.top, insets.bottom]];
+    
+    NSMutableArray *constraintArray = [NSMutableArray array];
+    for (NSString *stringFormat in constraintStringArray) {
+        [constraintArray addObjectsFromArray:[NSLayoutConstraint constraintsWithVisualFormat:stringFormat options:NSLayoutFormatAlignmentMask metrics:nil views:dict]];
+    }
+    [self.view addConstraints:constraintArray];
+    
+    [childViewController didMoveToParentViewController:self];
+}
+
 #pragma mark - Helper methods
 
 - (void)selectContentItem:(FSContentItem *)item atIndexPath:(NSIndexPath *)indexPath forTableView:(BOOL)tableView collectionView:(BOOL)collectionView {
@@ -316,20 +357,6 @@
     [self.navigationController pushViewController:authController animated:YES];
 }
 
-- (void)logout {
-    NSString *message = @"Are you sure you want to log out?";
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Logout" message:message preferredStyle:UIAlertControllerStyleAlert];
-    UIAlertAction *confirmAction = [UIAlertAction actionWithTitle:@"Log out" style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
-        [self performLogout];
-    }];
-    UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
-    }];
-    [alert addAction:confirmAction];
-    [alert addAction:cancelAction];
-
-    [self presentViewController:alert animated:YES completion:nil];
-}
-
 - (void)performLogout {
     [self disableUI];
     FSSession *session = [[FSSession alloc] initWithConfig:self.config];
@@ -373,33 +400,6 @@
 - (void)enableRefreshControls {
     [self.tableViewController refreshControlEnabled:YES];
     [self.collectionViewController refreshControlEnabled:YES];
-}
-
-- (void)listGridSwitch:(UIBarButtonItem *)sender {
-    if (self.inListView) {
-        self.inListView = NO;
-        sender.image = [self imageForViewType];
-        [self fsRemoveChildViewController:self.tableViewController];
-        [self fsAddChildViewController:self.collectionViewController];
-    } else {
-        self.inListView = YES;
-        sender.image = [self imageForViewType];
-        [self fsRemoveChildViewController:self.collectionViewController];
-        [self fsAddChildViewController:self.tableViewController];
-    }
-}
-
-- (void)fsRemoveChildViewController:(UIViewController *)childViewController {
-    [childViewController willMoveToParentViewController:nil];
-    [childViewController.view removeFromSuperview];
-    [childViewController removeFromParentViewController];
-}
-
-- (void)fsAddChildViewController:(UIViewController *)childViewController {
-    [self addChildViewController:childViewController];
-    childViewController.view.frame = self.view.bounds;
-    [self.view addSubview:childViewController.view];
-    [childViewController didMoveToParentViewController:self];
 }
 
 - (void)showAlertWithError:(NSError *)error {

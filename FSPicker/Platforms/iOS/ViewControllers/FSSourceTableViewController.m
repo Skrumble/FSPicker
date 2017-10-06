@@ -31,7 +31,7 @@ static NSString *const reuseIdentifier = @"fsCell";
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     [self.refreshControl endRefreshing];
-    [self updateTableViewContentInsets];
+//    [self updateTableViewContentInsets];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -47,8 +47,8 @@ static NSString *const reuseIdentifier = @"fsCell";
     self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
     // Force fixed separator's left inset value.
     UIEdgeInsets separatorInsets = self.tableView.separatorInset;
-    self.tableView.separatorInset = UIEdgeInsetsMake(separatorInsets.top, 62, separatorInsets.bottom, separatorInsets.right);
-    [self updateTableViewContentInsets];
+//    self.tableView.separatorInset = UIEdgeInsetsMake(separatorInsets.top, 62, separatorInsets.bottom, separatorInsets.right);
+//    [self updateTableViewContentInsets];
 }
 
 - (void)setupRefreshControl {
@@ -98,16 +98,9 @@ static NSString *const reuseIdentifier = @"fsCell";
 // This fine method is required to fix tableView content insets if this controller is contained in another controller
 // that is contained in navigation controller and there is yet another view controller contained in this controller's parent.
 // Heh...
+// --> Arnaud: you just set the view not properly, with constraint no need to change the inset ...
 
-- (void)updateTableViewContentInsets {
-    UIEdgeInsets currentInsets = self.tableView.contentInset;
-    CGFloat topInset = [self topInset];
-
-    if (currentInsets.top != 0 || !_alreadyDisplayed) {
-        self.tableView.contentInset = UIEdgeInsetsMake(topInset, currentInsets.left, currentInsets.bottom, currentInsets.right);
-        self.alreadyDisplayed = YES;
-    }
-}
+//- (void)updateTableViewContentInsets {
 
 - (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
     [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
@@ -120,33 +113,15 @@ static NSString *const reuseIdentifier = @"fsCell";
     }
 
     [coordinator animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext>  _Nonnull context) {
-        [self updateTableViewContentInsets];
+//        [self updateTableViewContentInsets];
     } completion:^(id<UIViewControllerTransitionCoordinatorContext>  _Nonnull context) {
         CGFloat toolbarHeight = self.navigationController.toolbar.frame.size.height;
         BOOL toolbarHidden = self.navigationController.toolbar.isHidden;
-        [self updateTableInsetsForToolbarHidden:toolbarHidden currentlyHidden:toolbarHidden toolbarHeight:toolbarHeight];
+//        [self updateTableInsetsForToolbarHidden:toolbarHidden currentlyHidden:toolbarHidden toolbarHeight:toolbarHeight];
     }];
 }
 
-- (void)updateTableInsetsForToolbarHidden:(BOOL)hidden currentlyHidden:(BOOL)currentlyHidden toolbarHeight:(CGFloat)height {
-    UIEdgeInsets currentInsets = self.tableView.contentInset;
-    CGPoint currentOffset = self.tableView.contentOffset;
-    CGFloat bottomInset;
-    CGFloat yOffset;
-
-    if (hidden) {
-        bottomInset = 0.0;
-        yOffset = -height;
-    } else {
-        bottomInset = height;
-        yOffset = currentlyHidden ? height : 0.0;
-    }
-
-    self.tableView.contentInset = UIEdgeInsetsMake(currentInsets.top, currentInsets.left, bottomInset, currentInsets.right);
-    if (currentOffset.y > [self topInset]) {
-        [self.tableView setContentOffset:CGPointMake(currentOffset.x, currentOffset.y + yOffset) animated:YES];
-    }
-}
+//- (void)updateTableInsetsForToolbarHidden:(BOOL)hidden currentlyHidden:(BOOL)currentlyHidden toolbarHeight:(CGFloat)height {
 
 #pragma mark - Table view data source
 

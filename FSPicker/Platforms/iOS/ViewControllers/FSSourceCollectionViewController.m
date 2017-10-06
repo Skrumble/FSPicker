@@ -47,7 +47,7 @@ static NSString * const reuseIdentifier = @"fsCell";
         [self.refreshControl beginRefreshing];
         [self.refreshControl endRefreshing];
     });
-    [self updateCollectionViewContentInsets];
+//    [self updateCollectionViewContentInsets];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -159,29 +159,9 @@ static NSString * const reuseIdentifier = @"fsCell";
 // This fine method is required to fix tableView content insets if this controller is contained in another controller
 // that is contained in navigation controller and there is yet another view controller contained in this controller's parent.
 // Heh...
+// --> Arnaud: you just set the view not properly, with constraint no need to change the inset ...
 
-- (void)updateCollectionViewContentInsets {
-    UIEdgeInsets currentInsets = self.collectionView.contentInset;
-    CGPoint currentOffset = self.collectionView.contentOffset;
-    CGFloat topInset = [self topInset];
-
-    BOOL refreshingData = [self.refreshControl isRefreshing];
-    if (currentInsets.top > 64 || refreshingData) {
-        if (refreshingData) {
-            topInset += self.refreshControl.frame.size.height;
-        } else {
-            topInset = currentInsets.top;
-        }
-    }
-
-    self.collectionView.contentInset = UIEdgeInsetsMake(topInset, currentInsets.left, currentInsets.bottom, currentInsets.right);
-
-    if (!self.alreadyDisplayed) {
-        self.collectionView.contentOffset = CGPointMake(currentOffset.x, currentOffset.y - topInset);
-    }
-
-    self.alreadyDisplayed = YES;
-}
+//- (void)updateCollectionViewContentInsets {
 
 - (CGFloat)topInset {
     CGFloat navBarHeight = self.navigationController.navigationBar.frame.size.height;
@@ -391,25 +371,7 @@ static NSString * const reuseIdentifier = @"fsCell";
 
 #pragma mark - Collection layout
 
-- (void)updateCollectionInsetsForToolbarHidden:(BOOL)hidden currentlyHidden:(BOOL)currentlyHidden toolbarHeight:(CGFloat)height {
-    UIEdgeInsets currentInsets = self.collectionView.contentInset;
-    CGPoint currentOffset = self.collectionView.contentOffset;
-    CGFloat bottomInset;
-    CGFloat yOffset;
-
-    if (hidden) {
-        bottomInset = 0.0;
-        yOffset = -height;
-    } else {
-        bottomInset = height;
-        yOffset = currentlyHidden ? height : 0.0;
-    }
-
-    self.collectionView.contentInset = UIEdgeInsetsMake(currentInsets.top, currentInsets.left, bottomInset, currentInsets.right);
-    if (currentOffset.y > [self topInset]) {
-        [self.collectionView setContentOffset:CGPointMake(currentOffset.x, currentOffset.y + yOffset) animated:YES];
-    }
-}
+//- (void)updateCollectionInsetsForToolbarHidden:(BOOL)hidden currentlyHidden:(BOOL)currentlyHidden toolbarHeight:(CGFloat)height {
 
 - (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
     [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
@@ -423,11 +385,11 @@ static NSString * const reuseIdentifier = @"fsCell";
     }
 
     [coordinator animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext>  _Nonnull context) {
-        [self updateCollectionViewContentInsets];
+//        [self updateCollectionViewContentInsets];
     } completion:^(id<UIViewControllerTransitionCoordinatorContext>  _Nonnull context) {
-        CGFloat toolbarHeight = self.navigationController.toolbar.frame.size.height;
-        BOOL toolbarHidden = self.navigationController.toolbar.isHidden;
-        [self updateCollectionInsetsForToolbarHidden:toolbarHidden currentlyHidden:toolbarHidden toolbarHeight:toolbarHeight];
+//        CGFloat toolbarHeight = self.navigationController.toolbar.frame.size.height;
+//        BOOL toolbarHidden = self.navigationController.toolbar.isHidden;
+//        [self updateCollectionInsetsForToolbarHidden:toolbarHidden currentlyHidden:toolbarHidden toolbarHeight:toolbarHeight];
     }];
 }
 

@@ -20,6 +20,5 @@
 - (void)refreshControlEnabled:(BOOL)enabled;
 - (void)contentDataReceived:(NSArray<FSContentItem *> *)contentData isNextPageData:(BOOL)isNextPageData;
 - (void)reloadCellAtIndexPath:(NSIndexPath *)indexPath;
-- (void)updateCollectionInsetsForToolbarHidden:(BOOL)hidden currentlyHidden:(BOOL)currentlyHidden toolbarHeight:(CGFloat)height;
 
 @end
