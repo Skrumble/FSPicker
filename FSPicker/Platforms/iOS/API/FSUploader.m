@@ -8,7 +8,10 @@
 
 #import <Filestack/Filestack.h>
 #import <Filestack/Filestack+FSPicker.h>
+
 #import "UIImage+Rotate.h"
+
+#import "FSPickerController.h"
 #import "FSSource.h"
 #import "FSConfig.h"
 #import "FSSession.h"
@@ -26,6 +29,14 @@
 
 @implementation FSUploader
 
+- (void)dealloc {
+    NSLog(@"FSPICKER - dealloc FSUploader");
+    // make sure to quit the picker
+    if (self.config.shouldCloseAfterDownload) {
+        [FSPickerController closeCurrentFSPickerDisplayed];
+    }
+}
+
 - (instancetype)initWithConfig:(FSConfig *)config source:(FSSource *)source {
     if ((self = [super init])) {
         _config = config;
@@ -36,189 +47,197 @@
     return self;
 }
 
-- (void)uploadCloudItems:(NSArray<FSContentItem *> *)items {
-    NSUInteger totalNumberOfItems = items.count;
-    NSUInteger __block uploadedItems = 0;
-    FSDownloader *downloader;
-    FSSession *session = [[FSSession alloc] initWithConfig:self.config mimeTypes:self.source.mimeTypes];
-
-    // We have to upload AND download the item.
-    if (self.config.shouldDownload) {
-        downloader = [[FSDownloader alloc] init];
-        totalNumberOfItems *= 2;
-    }
-
-    for (FSContentItem *item in items) {
-        NSDictionary *parameters = [session toQueryParametersWithFormat:@"fpurl"];
-
-        [Filestack pickFSURL:item.linkPath parameters:parameters completionHandler:^(FSBlob *blob, NSError *error) {
-            uploadedItems++;
-            // We won't download if there is an error, but have to "mark" the item as finished.
-            if (self.config.shouldDownload && error) {
-                uploadedItems++;
-                [self messageDelegateWithBlob:blob error:error];
-            }
-
-            if (self.config.shouldDownload && !error) {
-                // Downloader will modify the blob, setting internalURL on successful download.
-                [downloader download:blob security:self.config.storeOptions.security completionHandler:^(NSString *fileURL, NSError *error) {
-                    uploadedItems++;
-                    blob.internalURL = fileURL;
-
-                    [self updateProgress:uploadedItems total:totalNumberOfItems];
-                    [self messageDelegateWithBlob:blob error:error];
-
-                    if (uploadedItems == totalNumberOfItems) {
-                        [self finishUpload];
-                    }
-                }];
-            }
-
-            [self updateProgress:uploadedItems total:totalNumberOfItems];
-
-            if (!self.config.shouldDownload) {
-                [self messageDelegateWithBlob:blob error:error];
-            }
-
-            if (uploadedItems == totalNumberOfItems) {
-                [self finishUpload];
-            }
-        }];
-    }
-}
-
-- (void)updateProgress:(NSUInteger)uploadedItems total:(NSUInteger)totalItems {
-    if ([self.uploadModalDelegate respondsToSelector:@selector(fsUploadProgress:addToTotalProgress:)]) {
-        float currentProgress = (float)uploadedItems / totalItems;
-        [self.uploadModalDelegate fsUploadProgress:currentProgress addToTotalProgress:NO];
-    }
-}
+#pragma mark - Uploads Finish
 
 - (void)finishUpload {
+    NSLog(@"FSPicker - finish upload FSUploader");
+    
+    // Complete upload progress
+    if ([self.uploadModalDelegate respondsToSelector:@selector(fsUploadProgress:addToTotalProgress:)]) {
+        [self.uploadModalDelegate fsUploadProgress:1.0 addToTotalProgress:NO];
+    }
+    
+    // fsUploadFinishedWithBlobs Delegate
     if ([self.uploadModalDelegate respondsToSelector:@selector(fsUploadFinishedWithBlobs:completion:)]) {
+        __weak typeof(self) weakSelf = self;
         [self.uploadModalDelegate fsUploadFinishedWithBlobs:nil completion:^{
-            if ([self.pickerDelegate respondsToSelector:@selector(fsUploadFinishedWithBlobs:completion:)]) {
-                [self.pickerDelegate fsUploadFinishedWithBlobs:self.blobsArray completion:nil];
+            if ([weakSelf.pickerDelegate respondsToSelector:@selector(fsUploadFinishedWithBlobs:completion:)]) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [weakSelf.pickerDelegate fsUploadFinishedWithBlobs:weakSelf.blobsArray completion:nil];
+                });
             }
         }];
     }
+    
+    // Close view on config
+    if (self.config.shouldCloseAfterDownload) {
+        [FSPickerController closeCurrentFSPickerDisplayed];
+    }
 }
 
+#pragma mark - Camera
+
 - (void)uploadCameraItemWithInfo:(NSDictionary<NSString *,id> *)info {
+// Original IMAGE
     if (info[UIImagePickerControllerOriginalImage]) {
         UIImage *image = info[UIImagePickerControllerOriginalImage];
         UIImage *rotatedImage = [image fixRotation];
-        NSData *imageData = UIImageJPEGRepresentation(rotatedImage, 0.95);
+        NSData *imageData = UIImageJPEGRepresentation(rotatedImage, 0.8);
         NSString *fileName = [NSString stringWithFormat:@"Image_%@.jpg", [NSDateFormatter localizedStringFromDate:[NSDate date] dateStyle:NSDateFormatterShortStyle timeStyle:NSDateFormatterShortStyle]];
         NSCharacterSet *dateFormat = [NSCharacterSet characterSetWithCharactersInString:@"/: "];
         fileName = [[fileName componentsSeparatedByCharactersInSet:dateFormat] componentsJoinedByString:@"-"];
-
+        
         [self uploadCameraItem:imageData fileName:fileName];
-    } else if (info[UIImagePickerControllerMediaURL]) {
+    }
+// URL
+    else if (info[UIImagePickerControllerMediaURL]) {
         NSURL *fileURL = info[UIImagePickerControllerMediaURL];
         NSString *fileName = fileURL.lastPathComponent;
         NSData *videoData = [NSData dataWithContentsOfURL:fileURL];
-
+        
         [self uploadCameraItem:videoData fileName:fileName];
     }
 }
 
 - (void)uploadCameraItem:(NSData *)itemData fileName:(NSString *)fileName {
     BOOL delegateRespondsToUploadProgress = [self.uploadModalDelegate respondsToSelector:@selector(fsUploadProgress:addToTotalProgress:)];
-
+    
     Filestack *filestack = [[Filestack alloc] initWithApiKey:self.config.apiKey];
     FSStoreOptions *storeOptions = [self.config.storeOptions copy];
-
+    
     if (!storeOptions) {
         storeOptions = [[FSStoreOptions alloc] init];
     }
-
+    
     storeOptions.fileName = fileName;
     storeOptions.mimeType = nil;
-
+    
     [filestack store:itemData withOptions:storeOptions progress:^(NSProgress *uploadProgress) {
         if (delegateRespondsToUploadProgress) {
-            [self.uploadModalDelegate fsUploadProgress:uploadProgress.fractionCompleted addToTotalProgress:NO];
+            double fractionCompleted = uploadProgress.fractionCompleted;
+            [self.uploadModalDelegate fsUploadProgress:fractionCompleted addToTotalProgress:NO];
         }
     } completionHandler:^(FSBlob *blob, NSError *error) {
-        // This line is useless
-        // delegate method are called twice
-//        [self messageDelegateWithBlob:blob error:error];
-
-        if (blob) {
-            [self messageDelegateLocalUploadFinished];
-        }
-        // make sure to send it
         [self messageDelegateWithBlob:blob error:error];
-
-        if (delegateRespondsToUploadProgress) {
-            [self.uploadModalDelegate fsUploadProgress:1.0 addToTotalProgress:NO];
-        }
+        [self finishUpload];
     }];
 }
+
+#pragma mark - Local File
 
 - (void)uploadLocalItems:(NSArray<PHAsset *> *)items {
     BOOL delegateRespondsToUploadProgress = [self.uploadModalDelegate respondsToSelector:@selector(fsUploadProgress:addToTotalProgress:)];
     NSUInteger totalNumberOfItems = items.count;
-    NSUInteger __block uploadedItems = 0;
-
+    __weak typeof(self) weakSelf = self;
+    
     Filestack *filestack = [[Filestack alloc] initWithApiKey:self.config.apiKey];
     FSStoreOptions *storeOptions = [self.config.storeOptions copy];
-
+    
     if (!storeOptions) {
         storeOptions = [[FSStoreOptions alloc] init];
     }
-
+    
     storeOptions.mimeType = nil;
-
+    
     PHVideoRequestOptions *options = [[PHVideoRequestOptions alloc] init];
     options.version = PHVideoRequestOptionsVersionOriginal;
-
+    
+// DISPATCH GROUP: called after all upload is done
+    dispatch_group_t allFileUploadedGroup = dispatch_group_create();
+    for (PHAsset *item in items) { dispatch_group_enter(allFileUploadedGroup); }
+    dispatch_group_notify(allFileUploadedGroup, dispatch_get_main_queue(), ^{
+        [weakSelf finishUpload];
+    });
+    
     for (PHAsset *item in items) {
         double __block progressToAdd = 0.0;
         double __block currentItemProgress = 0.0;
+        [self uploadLocalMediaContentAsset:item usingFilestack:filestack storeOptions:storeOptions progress:^(NSProgress *uploadProgress) {
+            progressToAdd = uploadProgress.fractionCompleted * (1.0 / totalNumberOfItems) - currentItemProgress;
+            currentItemProgress = uploadProgress.fractionCompleted * (1.0 / totalNumberOfItems);
+            [self.uploadModalDelegate fsUploadProgress:progressToAdd addToTotalProgress:YES];
+        } completionHandler:^(FSBlob *blob, NSError *error) {
+            [weakSelf messageDelegateWithBlob:blob error:error];
+            dispatch_group_leave(allFileUploadedGroup);
+        }];
+    }
+}
 
-        if (item.mediaType == PHAssetMediaTypeImage) {
-            [self uploadLocalImageAsset:item usingFilestack:filestack storeOptions:storeOptions progress:^(NSProgress *uploadProgress) {
-                if (delegateRespondsToUploadProgress) {
-                    progressToAdd = uploadProgress.fractionCompleted * (1.0 / totalNumberOfItems) - currentItemProgress;
-                    currentItemProgress = uploadProgress.fractionCompleted * (1.0 / totalNumberOfItems);
-                    [self.uploadModalDelegate fsUploadProgress:progressToAdd addToTotalProgress:YES];
-                }
-            } completionHandler:^(FSBlob *blob, NSError *error) {
-                uploadedItems++;
+#pragma mark - Cloud / Drive
 
+- (void)uploadCloudItems:(NSArray<FSContentItem *> *)items {
+    NSUInteger totalNumberOfItems = items.count;
+    __block NSNumber *uploadedItems = @(0);
+    
+    FSDownloader *downloader;
+    FSSession *session = [[FSSession alloc] initWithConfig:self.config mimeTypes:self.source.mimeTypes];
+    
+    // We have to upload AND download the item.
+    if (self.config.shouldDownload) {
+        downloader = [[FSDownloader alloc] init];
+        totalNumberOfItems *= 2;
+    }
+    
+    // DISPATCH GROUP: called after all upload is done
+    __weak typeof(self) weakSelf = self;
+    dispatch_group_t allFileUploadedGroup = dispatch_group_create();
+    for (PHAsset *item in items) { dispatch_group_enter(allFileUploadedGroup); }
+    dispatch_group_notify(allFileUploadedGroup, dispatch_get_main_queue(), ^{
+        [weakSelf finishUpload];
+    });
+    
+    for (FSContentItem *item in items) {
+        NSDictionary *parameters = [session toQueryParametersWithFormat:@"fpurl"];
+        
+        [Filestack pickFSURL:item.linkPath parameters:parameters completionHandler:^(FSBlob *blob, NSError *error) {
+            
+            // update the progress
+            @synchronized(uploadedItems) {
+                uploadedItems = @(uploadedItems.integerValue+1);
+                [self updateProgress:uploadedItems.integerValue total:totalNumberOfItems];
+            }
+            
+            if (self.config.shouldDownload == NO || error) {
                 [self messageDelegateWithBlob:blob error:error];
-
-                if (uploadedItems == totalNumberOfItems) {
-                    [self messageDelegateLocalUploadFinished];
+                dispatch_group_leave(allFileUploadedGroup);
+                return;
+            }
+            
+            [downloader download:blob security:self.config.storeOptions.security completionHandler:^(NSString *fileURL, NSError *error) {
+                
+                @synchronized(uploadedItems) {
+                    uploadedItems = @(uploadedItems.integerValue+1);
+                    [self updateProgress:uploadedItems.integerValue total:totalNumberOfItems];
                 }
-            }];
-        } else if (item.mediaType == PHAssetMediaTypeVideo) {
-            [self uploadLocalVideoAsset:item usingFilestack:filestack storeOptions:storeOptions progress:^(NSProgress *uploadProgress) {
-                if (delegateRespondsToUploadProgress) {
-                    progressToAdd = uploadProgress.fractionCompleted * (1.0 / totalNumberOfItems) - currentItemProgress;
-                    currentItemProgress = uploadProgress.fractionCompleted * (1.0 / totalNumberOfItems);
-                    [self.uploadModalDelegate fsUploadProgress:progressToAdd addToTotalProgress:YES];
-                }
-            } completionHandler:^(FSBlob *blob, NSError *error) {
-                uploadedItems++;
-
+                
+                blob.internalURL = fileURL;
                 [self messageDelegateWithBlob:blob error:error];
-
-                if (uploadedItems == totalNumberOfItems) {
-                    [self messageDelegateLocalUploadFinished];
-                }
+                
+                dispatch_group_leave(allFileUploadedGroup);
             }];
+            
+        }];
+    }
+}
+
+#pragma mark - Upload Action
+
+- (void)uploadLocalMediaContentAsset:(PHAsset *)asset usingFilestack:(Filestack *)filestack storeOptions:(FSStoreOptions *)storeOptions progress:(void (^)(NSProgress *uploadProgress))progress completionHandler:(void (^)(FSBlob *blob, NSError *error))completionHandler {
+    if (asset.mediaType == PHAssetMediaTypeImage) {
+        [self uploadLocalImageAsset:asset usingFilestack:filestack storeOptions:storeOptions progress:progress completionHandler:completionHandler];
+    }
+    else if (asset.mediaType == PHAssetMediaTypeVideo) {
+        [self uploadLocalVideoAsset:asset usingFilestack:filestack storeOptions:storeOptions progress:progress completionHandler:completionHandler];
+    }
+    else {
+        // no handle yet
+        if (completionHandler) {
+            completionHandler (nil, nil);
         }
     }
 }
 
-- (void)uploadLocalImageAsset:(PHAsset *)asset
-               usingFilestack:(Filestack *)filestack
-                 storeOptions:(FSStoreOptions *)storeOptions
-                     progress:(void (^)(NSProgress *uploadProgress))progress
-            completionHandler:(void (^)(FSBlob *blob, NSError *error))completionHandler {
+- (void)uploadLocalImageAsset:(PHAsset *)asset usingFilestack:(Filestack *)filestack storeOptions:(FSStoreOptions *)storeOptions progress:(void (^)(NSProgress *uploadProgress))progress completionHandler:(void (^)(FSBlob *blob, NSError *error))completionHandler {
 
     PHImageRequestOptions *option = [[PHImageRequestOptions alloc] init];
     option.networkAccessAllowed = YES;
@@ -228,19 +247,11 @@
         NSString *fileName = imageURL.lastPathComponent;
         storeOptions.fileName = fileName;
 
-        [filestack store:imageData withOptions:storeOptions progress:^(NSProgress *uploadProgress) {
-            progress(uploadProgress);
-        } completionHandler:^(FSBlob *blob, NSError *error) {
-            completionHandler(blob, error);
-        }];
+        [filestack store:imageData withOptions:storeOptions progress:progress completionHandler:completionHandler];
     }];
 }
 
-- (void)uploadLocalVideoAsset:(PHAsset *)asset
-               usingFilestack:(Filestack *)filestack
-                 storeOptions:(FSStoreOptions *)storeOptions
-                     progress:(void (^)(NSProgress *uploadProgress))progress
-            completionHandler:(void (^)(FSBlob *blob, NSError *error))completionHandler {
+- (void)uploadLocalVideoAsset:(PHAsset *)asset usingFilestack:(Filestack *)filestack storeOptions:(FSStoreOptions *)storeOptions progress:(void (^)(NSProgress *uploadProgress))progress completionHandler:(void (^)(FSBlob *blob, NSError *error))completionHandler {
 
     PHVideoRequestOptions *options = [[PHVideoRequestOptions alloc] init];
     options.version = PHVideoRequestOptionsVersionOriginal;
@@ -257,28 +268,19 @@
         NSString *fileName = URL.lastPathComponent;
         storeOptions.fileName = fileName;
 
-        [filestack store:data withOptions:storeOptions progress:^(NSProgress *uploadProgress) {
-            progress(uploadProgress);
-        } completionHandler:^(FSBlob *blob, NSError *error) {
-            completionHandler(blob, error);
-        }];
+        [filestack store:data withOptions:storeOptions progress:progress completionHandler:completionHandler];
     }];
 }
 
-- (void)messageDelegateLocalUploadFinished {
-    if ([self.uploadModalDelegate respondsToSelector:@selector(fsUploadProgress:addToTotalProgress:)]) {
-        [self.uploadModalDelegate fsUploadProgress:1.0 addToTotalProgress:NO];
-    }
+#pragma mark - Delegates
 
-    if ([self.uploadModalDelegate respondsToSelector:@selector(fsUploadFinishedWithBlobs:completion:)]) {
-        [self.uploadModalDelegate fsUploadFinishedWithBlobs:nil completion:^{
-            if ([self.pickerDelegate respondsToSelector:@selector(fsUploadFinishedWithBlobs:completion:)]) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    [self.pickerDelegate fsUploadFinishedWithBlobs:self.blobsArray completion:nil];
-                });
-            }
-        }];
+- (void)updateProgress:(NSUInteger)uploadedItems total:(NSUInteger)totalItems {
+    dispatch_async(dispatch_get_main_queue(), ^{
+    if ([self.uploadModalDelegate respondsToSelector:@selector(fsUploadProgress:addToTotalProgress:)]) {
+        float currentProgress = (float)uploadedItems / totalItems;
+        [self.uploadModalDelegate fsUploadProgress:currentProgress addToTotalProgress:NO];
     }
+    });
 }
 
 - (void)messageDelegateWithBlob:(FSBlob *)blob error:(NSError *)error {
@@ -299,7 +301,7 @@
         if ([self.uploadModalDelegate respondsToSelector:@selector(fsUploadError:withCompletion:)]) {
             [self.uploadModalDelegate fsUploadError:error withCompletion:^{
                 if ([weakSelf.pickerDelegate respondsToSelector:@selector(fsUploadError:)]) {
-                    [weakSelf.pickerDelegate fsUploadError:error];
+                   [weakSelf.pickerDelegate fsUploadError:error];
                 }
             }];
         }

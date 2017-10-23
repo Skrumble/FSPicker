@@ -11,6 +11,7 @@
 #import "FSCollectionViewCell.h"
 #import "FSImageFetcher.h"
 #import "FSBarButtonItem.h"
+#import "FSPickerController.h"
 #import "FSConfig.h"
 #import "FSImage.h"
 #import "FSUploader.h"
@@ -40,8 +41,12 @@
         _cachingImageManager = [[PHCachingImageManager alloc] init];
         self.collectionView.allowsMultipleSelection = YES;
     }
-
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationWillEnterForeground) name:UIApplicationWillEnterForegroundNotification object:nil];
     return self;
+}
+
+- (void)applicationWillEnterForeground {
+    [self.collectionView reloadData];
 }
 
 - (void)viewDidLoad {
@@ -56,10 +61,49 @@
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     [self.navigationController setToolbarHidden:YES animated:YES];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationWillEnterForegroundNotification object:nil];
 }
 
 - (void)didReceiveMemoryWarning {
     [super didReceiveMemoryWarning];
+}
+
+#pragma mark - User Action
+
+- (void)uploadSelectedAssets {
+        
+    if (self.config.shouldUpload) {
+        FSUploader *uploader = [FSPickerController createUploaderWithViewController:self config:self.config source:self.source];
+        [uploader uploadLocalItems:self.selectedAssets];
+        [self clearSelectedAssets];
+    }
+    else {
+        PHAsset *asset = self.selectedAssets.firstObject;
+        PHImageRequestOptions *requestOptions = [[PHImageRequestOptions alloc] init];
+        requestOptions.resizeMode   = PHImageRequestOptionsResizeModeExact;
+        requestOptions.deliveryMode = PHImageRequestOptionsDeliveryModeHighQualityFormat;
+        requestOptions.synchronous = YES;
+        requestOptions.networkAccessAllowed = YES;
+        
+        PHImageManager *manager = [PHImageManager defaultManager];
+        [manager requestImageForAsset:asset targetSize:PHImageManagerMaximumSize contentMode:PHImageContentModeDefault options:requestOptions resultHandler:^void(UIImage *image, NSDictionary *info) {
+            if ([((FSPickerController *)self.navigationController) respondsToSelector:@selector(fsImageSelected:withURL:)]) {
+                NSURL *url = (NSURL *)[info objectForKey:@"PHImageFileURLKey"];
+                [((FSPickerController *)self.navigationController) fsImageSelected:image withURL:url];
+            }
+        }];
+    }
+}
+
+- (void)clearSelectedAssets {
+    [self.selectedAssets removeAllObjects];
+    
+    for (NSIndexPath *indexPath in [self.selectedIndexPaths copy]) {
+        [self collectionView:self.collectionView didDeselectItemAtIndexPath:indexPath];
+    }
+    
+    [self.selectedIndexPaths removeAllObjects];
+    [self updateToolbar];
 }
 
 #pragma mark - Collection view
@@ -131,52 +175,6 @@
     cell.overlayImageView.image = self.selectedOverlay;
     cell.selected = YES;
     [self.collectionView selectItemAtIndexPath:indexPath animated:NO scrollPosition:UICollectionViewScrollPositionNone];
-}
-
-#pragma mark - Upload
-
-- (void)uploadSelectedAssets {
-    if(self.config.shouldUpload) {
-        FSProgressModalViewController *uploadModal = [[FSProgressModalViewController alloc] init];
-        uploadModal.modalPresentationStyle = UIModalPresentationOverCurrentContext;
-        
-        FSUploader *uploader = [[FSUploader alloc] initWithConfig:self.config source:self.source];
-        uploader.uploadModalDelegate = uploadModal;
-        uploader.pickerDelegate = (FSPickerController *)self.navigationController;
-        
-        [self presentViewController:uploadModal animated:YES completion:nil];
-        [uploader uploadLocalItems:self.selectedAssets];
-        [self clearSelectedAssets];
-    } else {
-        PHAsset *asset = self.selectedAssets.firstObject;
-        PHImageRequestOptions *requestOptions = [[PHImageRequestOptions alloc] init];
-        requestOptions.resizeMode   = PHImageRequestOptionsResizeModeExact;
-        requestOptions.deliveryMode = PHImageRequestOptionsDeliveryModeHighQualityFormat;
-        requestOptions.synchronous = true;
-        
-        PHImageManager *manager = [PHImageManager defaultManager];
-        [manager requestImageForAsset:asset
-                           targetSize:PHImageManagerMaximumSize
-                          contentMode:PHImageContentModeDefault
-                              options:requestOptions
-                        resultHandler:^void(UIImage *image, NSDictionary *info) {
-                            if( [((FSPickerController *)self.navigationController) respondsToSelector:@selector(fsImageSelected:withURL:)] ){
-                                NSURL *url = (NSURL *)[info objectForKey:@"PHImageFileURLKey"];
-                                [((FSPickerController *)self.navigationController) fsImageSelected:image withURL:url];
-                            }
-                        }];
-    }
-}
-
-- (void)clearSelectedAssets {
-    [self.selectedAssets removeAllObjects];
-
-    for (NSIndexPath *indexPath in [self.selectedIndexPaths copy]) {
-        [self collectionView:self.collectionView didDeselectItemAtIndexPath:indexPath];
-    }
-
-    [self.selectedIndexPaths removeAllObjects];
-    [self updateToolbar];
 }
 
 #pragma mark - Toolbar

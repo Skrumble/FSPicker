@@ -334,14 +334,7 @@ static NSString * const headerReuseIdentifier = @"headerView";
 #pragma mark - Upload
 
 - (void)uploadSelectedContents {
-    FSProgressModalViewController *uploadModal = [[FSProgressModalViewController alloc] init];
-    uploadModal.modalPresentationStyle = UIModalPresentationOverCurrentContext;
-
-    FSUploader *uploader = [[FSUploader alloc] initWithConfig:self.config source:self.source];
-    uploader.uploadModalDelegate = uploadModal;
-    uploader.pickerDelegate = (FSPickerController *)self.navigationController;
-
-    [self presentViewController:uploadModal animated:YES completion:nil];
+    FSUploader *uploader = [FSPickerController createUploaderWithViewController:self config:self.config source:self.source];
     [uploader uploadCloudItems:self.selectedContent];
 
     [self.selectedContent removeAllObjects];

@@ -9,6 +9,7 @@
 @class FSBlob;
 @class FSPickerController;
 @class FSSaveController;
+@class UIImage;
 
 @protocol FSPickerDelegate <NSObject>
 @optional
@@ -16,6 +17,7 @@
 - (void)fsPicker:(FSPickerController *)picker pickingDidError:(NSError *)error;
 - (void)fsPicker:(FSPickerController *)picker pickedMediaWithBlob:(FSBlob *)blob;
 - (void)fsPicker:(FSPickerController *)picker didFinishPickingMediaWithBlobs:(NSArray<FSBlob *> *)blobs;
+- (void)fsPicker:(FSPickerController *)picker didFinishPickingWithUIImage:(UIImage *)asset withURL:(NSURL *)url;
 @end
 
 @protocol FSSaveDelegate <NSObject>

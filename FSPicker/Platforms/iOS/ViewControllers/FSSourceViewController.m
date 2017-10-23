@@ -26,7 +26,6 @@
 
 @interface FSSourceViewController () <FSAuthViewControllerDelegate>
 
-@property (nonatomic, assign) BOOL toolbarColorsSet;
 @property (nonatomic, assign) BOOL initialContentLoad;
 @property (nonatomic, assign, readwrite) BOOL lastPage;
 @property (nonatomic, assign, readwrite) BOOL inListView;
@@ -38,6 +37,8 @@
 @property (nonatomic, strong) NSMutableArray<FSContentItem *> *selectedContent;
 @property (nonatomic, strong) FSSourceTableViewController *tableViewController;
 @property (nonatomic, strong) FSSourceCollectionViewController *collectionViewController;
+
+@property NSLayoutConstraint *collectionViewBottomConstraint;
 
 @end
 
@@ -58,6 +59,10 @@
     return self;
 }
 
+- (void)dealloc {
+    NSLog(@"FSPICHER - dealloc FSSourceViewController");
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
 
@@ -67,7 +72,7 @@
     self.title = self.source.name;
     self.automaticallyAdjustsScrollViewInsets = NO;
     self.navigationItem.backBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Back" style:UIBarButtonItemStylePlain target:nil action:nil];
-
+    
     if (self.inListView) {
         [self fsAddChildViewController:self.tableViewController];
         self.tableViewController.alreadyDisplayed = YES;
@@ -92,6 +97,8 @@
 
 - (void)setupToolbar {
     [self setToolbarItems:@[[self spaceButtonItem], [self uploadButtonItem], [self spaceButtonItem]] animated:NO];
+    self.navigationController.toolbar.barTintColor = [FSBarButtonItem appearance].backgroundColor;
+    self.navigationController.toolbar.tintColor = [FSBarButtonItem appearance].normalTextColor;
 }
 
 - (UIBarButtonItem *)spaceButtonItem {
@@ -103,17 +110,17 @@
 }
 
 - (void)updateToolbar {
-    if (!self.toolbarColorsSet) {
-        self.toolbarColorsSet = YES;
-        self.navigationController.toolbar.barTintColor = [FSBarButtonItem appearance].backgroundColor;
-        self.navigationController.toolbar.tintColor = [FSBarButtonItem appearance].normalTextColor;
-    }
-
     if (self.selectedContent.count > 0) {
         [self.navigationController setToolbarHidden:NO animated:YES];
+        if (self.collectionViewBottomConstraint) {
+            self.collectionViewBottomConstraint.constant = self.navigationController.toolbar.frame.size.height;
+        }
         [self updateToolbarButtonTitle];
     } else {
         [self.navigationController setToolbarHidden:YES animated:YES];
+        if (self.collectionViewBottomConstraint) {
+            self.collectionViewBottomConstraint.constant = 0;
+        }
     }
 }
 
@@ -133,20 +140,6 @@
 
 - (UIBarButtonItem *)uploadButton {
     return self.toolbarItems[1];
-}
-
-- (void)uploadSelectedContents {
-    FSProgressModalViewController *uploadModal = [[FSProgressModalViewController alloc] init];
-    uploadModal.modalPresentationStyle = UIModalPresentationOverCurrentContext;
-
-    FSUploader *uploader = [[FSUploader alloc] initWithConfig:self.config source:self.source];
-    uploader.uploadModalDelegate = uploadModal;
-    uploader.pickerDelegate = (FSPickerController *)self.navigationController;
-
-    [self presentViewController:uploadModal animated:YES completion:nil];
-    [uploader uploadCloudItems:self.selectedContent];
-    [self clearSelectedContent];
-    [self.collectionViewController clearAllCollectionItems]; // Clean this :O
 }
 
 #pragma mark - Setup view
@@ -238,8 +231,8 @@
 
 - (void)logout {
     NSString *message = @"Are you sure you want to log out?";
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Logout" message:message preferredStyle:UIAlertControllerStyleAlert];
-    UIAlertAction *confirmAction = [UIAlertAction actionWithTitle:@"Log out" style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Log Out" message:message preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertAction *confirmAction = [UIAlertAction actionWithTitle:@"Log Out" style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
         [self performLogout];
     }];
     UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
@@ -262,14 +255,25 @@
         [self fsRemoveChildViewController:self.collectionViewController];
         [self fsAddChildViewController:self.tableViewController];
     }
+    [self updateToolbar];
+}
+
+- (void)uploadSelectedContents {
+    FSUploader *uploader = [FSPickerController createUploaderWithViewController:self config:self.config source:self.source];
+
+    [uploader uploadCloudItems:self.selectedContent];
+    [self clearSelectedContent];
+    [self.collectionViewController clearAllCollectionItems]; // Clean this :O
 }
 
 #pragma mark - View Helper
 
 - (void)fsRemoveChildViewController:(UIViewController *)childViewController {
+    self.collectionViewBottomConstraint.constant = 0;
     [childViewController willMoveToParentViewController:nil];
     [childViewController.view removeFromSuperview];
     [childViewController removeFromParentViewController];
+    self.collectionViewBottomConstraint = nil;
 }
 
 - (void)fsAddChildViewController:(UIViewController *)childViewController {
@@ -292,7 +296,18 @@
     
     NSMutableArray *constraintArray = [NSMutableArray array];
     for (NSString *stringFormat in constraintStringArray) {
-        [constraintArray addObjectsFromArray:[NSLayoutConstraint constraintsWithVisualFormat:stringFormat options:NSLayoutFormatAlignmentMask metrics:nil views:dict]];
+        NSArray *generatedConstraints = [NSLayoutConstraint constraintsWithVisualFormat:stringFormat options:NSLayoutFormatAlignmentMask metrics:nil views:dict];
+        [constraintArray addObjectsFromArray:generatedConstraints];
+        
+        if (self.collectionViewBottomConstraint) {
+            continue;
+        }
+        for (NSLayoutConstraint *constraint in generatedConstraints) {
+            if (constraint.secondAttribute == NSLayoutAttributeBottom && constraint.secondItem == childViewController.view) {
+                self.collectionViewBottomConstraint = constraint;
+                break;
+            }
+        }
     }
     [self.view addConstraints:constraintArray];
     

@@ -140,21 +140,19 @@
 
 #pragma mark - KVO
 
-- (void)observeValueForKeyPath:(NSString *)keyPath
-                      ofObject:(id)object
-                        change:(NSDictionary *)change
-                       context:(void *)context
-{
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+    dispatch_async(dispatch_get_main_queue(), ^{
     [self setNeedsDisplay] ;
     
-    if([keyPath isEqualToString:@"startDegree"] ||
-       [keyPath isEqualToString:@"endDegree"]){
-        
-        KAProgressLabel *__unsafe_unretained weakSelf = self;
-        if(self.labelVCBlock) {
-            self.labelVCBlock(weakSelf);
+        if ([keyPath isEqualToString:@"startDegree"] || [keyPath isEqualToString:@"endDegree"]) {
+            KAProgressLabel *__unsafe_unretained weakSelf = self;
+            if (self.labelVCBlock) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    self.labelVCBlock(weakSelf);
+                });
+            }
         }
-    }
+    });
 }
 
 #pragma mark - Getters

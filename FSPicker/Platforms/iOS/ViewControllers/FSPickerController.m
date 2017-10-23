@@ -6,12 +6,17 @@
 //  Copyright © 2016 Filestack. All rights reserved.
 //
 
-#import "FSTheme.h"
 #import "FSPickerController.h"
+#import "FSTheme.h"
 #import "FSSourceListViewController.h"
 #import "FSProtocols+Private.h"
 
+#import "FSUploader.h"
+#import "FSProgressModalViewController.h"
+
 @interface FSPickerController () <FSUploaderDelegate>
+
+@property FSUploader *uploader;
 
 @end
 
@@ -21,6 +26,25 @@ static __weak FSPickerController *currentFSPickerController;
 
 + (FSPickerController *)getCurrentFSPickerControllerDisplayed {
     return currentFSPickerController;
+}
+
++ (void)closeCurrentFSPickerDisplayed {
+    [self closeCurrentFSPickerDisplayedWithCompletion:nil];
+}
+
++ (void)closeCurrentFSPickerDisplayedWithCompletion:(void (^)(void))completion {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (currentFSPickerController) {
+            NSLog(@"FSPICKER - CLOSE FSPickerController");
+            currentFSPickerController.uploader = nil;
+            [currentFSPickerController.presentingViewController dismissViewControllerAnimated:YES completion:nil];
+//            [currentFSPickerController dismissViewControllerAnimated:YES completion:completion];
+        }
+    });
+}
+
+- (void)dealloc {
+    NSLog(@"FSPICKER - dealloc FSPickerController");
 }
 
 - (instancetype)initWithConfig:(FSConfig *)config theme:(FSTheme *)theme {
@@ -64,18 +88,38 @@ static __weak FSPickerController *currentFSPickerController;
     });
 }
 
-- (void)fsUploadComplete:(FSBlob *)blob {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if ([self.fsDelegate respondsToSelector:@selector(fsPicker:pickedMediaWithBlob:)]) {
-            [self.fsDelegate fsPicker:self pickedMediaWithBlob:blob];
-        }
-    });
-}
-
 - (void)fsImageSelected:(UIImage *)asset withURL:(NSURL *)url {
     dispatch_async(dispatch_get_main_queue(), ^{
         if ([self.fsDelegate respondsToSelector:@selector(fsPicker:didFinishPickingWithUIImage:withURL:)]) {
             [self.fsDelegate fsPicker:self didFinishPickingWithUIImage:asset withURL:url];
+        }
+    });
+}
+
+#pragma mark - FSUPloader
+
++ (FSUploader *)createUploaderWithViewController:(UIViewController *)vc config:(FSConfig *)config source:(FSSource *)source {
+    
+// create the picker
+    FSUploader *uploader = [[FSUploader alloc] initWithConfig:config source:source];
+    uploader.pickerDelegate = (FSPickerController *)vc.navigationController;
+    
+// Loader View
+    FSProgressModalViewController *uploadModal = [[FSProgressModalViewController alloc] init];
+    uploadModal.modalPresentationStyle = UIModalPresentationOverCurrentContext;
+    uploader.uploadModalDelegate = uploadModal;
+    [vc presentViewController:uploadModal animated:YES completion:nil];
+    
+    if (currentFSPickerController) {
+        currentFSPickerController.uploader = uploader;
+    }
+    return uploader;
+}
+
+- (void)fsUploadComplete:(FSBlob *)blob {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if ([self.fsDelegate respondsToSelector:@selector(fsPicker:pickedMediaWithBlob:)]) {
+            [self.fsDelegate fsPicker:self pickedMediaWithBlob:blob];
         }
     });
 }

@@ -46,6 +46,7 @@ extern NSString *const FSSourceCloudDrive;
 @property (nonatomic, assign) BOOL shouldDownload;
 /// FSPickerController only.
 @property (nonatomic, assign) BOOL shouldUpload;
+@property (nonatomic, assign) BOOL shouldCloseAfterDownload;
 /// FSPickerController only.
 @property (nonatomic, assign) BOOL defaultToFrontCamera;
 /// FSPickerController only.

@@ -10,6 +10,8 @@
 #import "FSProtocols.h"
 @class FSTheme;
 @class FSConfig;
+@class FSUploader;
+@class FSSource;
 
 @interface FSPickerController : UINavigationController
 
@@ -23,5 +25,10 @@
 - (void)didCancel;
 
 + (FSPickerController *)getCurrentFSPickerControllerDisplayed;
++ (void)closeCurrentFSPickerDisplayed;
+
+#pragma mark - FSUPloader
+
++ (FSUploader *)createUploaderWithViewController:(UIViewController *)vc config:(FSConfig *)config source:(FSSource *)source;
 
 @end

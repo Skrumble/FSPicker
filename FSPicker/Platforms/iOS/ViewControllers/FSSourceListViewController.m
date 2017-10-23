@@ -47,6 +47,10 @@
     return self;
 }
 
+- (void)dealloc {
+    NSLog(@"FSPICKER - dealloc FSSourceListViewController");
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
 
@@ -264,24 +268,20 @@
 
 - (void)imagePickerController:(UIImagePickerController *)picker didFinishPickingMediaWithInfo:(NSDictionary<NSString *,id> *)info {
     [picker dismissViewControllerAnimated:YES completion:^{
-        if(self.config.shouldUpload == YES) {
-            FSProgressModalViewController *uploadModal = [[FSProgressModalViewController alloc] init];
-            uploadModal.modalPresentationStyle = UIModalPresentationOverCurrentContext;
-            
-            FSUploader *uploader = [[FSUploader alloc] initWithConfig:self.config source:nil];
-            uploader.uploadModalDelegate = uploadModal;
-            uploader.pickerDelegate = (FSPickerController *)self.navigationController;
-            
-            [self presentViewController:uploadModal animated:YES completion:nil];
-            
-            [uploader uploadCameraItemWithInfo:info];
-        } else {
+        
+        if (self.config.shouldUpload == NO) {
+            FSPickerController *pickerController = (FSPickerController *)self.navigationController;
             UIImage *image = [info objectForKey:UIImagePickerControllerOriginalImage];
-            if( [((FSPickerController *)self.navigationController) respondsToSelector:@selector(fsImageSelected:withURL:)] ){
-                [((FSPickerController *)self.navigationController) fsImageSelected:image withURL:nil];
+            if ([pickerController respondsToSelector:@selector(fsImageSelected:withURL:)]) {
+                [pickerController fsImageSelected:image withURL:nil];
+            }
+            if (self.config.shouldCloseAfterDownload) {
+                [FSPickerController closeCurrentFSPickerDisplayed];
             }
         }
-        
+
+        FSUploader *uploader = [FSPickerController createUploaderWithViewController:self config:self.config source:nil];
+        [uploader uploadCameraItemWithInfo:info];
     }];
 }
 

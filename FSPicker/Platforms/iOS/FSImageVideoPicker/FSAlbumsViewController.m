@@ -32,8 +32,12 @@
         _source = source;
         _thumbSize = 70.0;
     }
-
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationWillEnterForeground) name:UIApplicationWillEnterForegroundNotification object:nil];
     return self;
+}
+
+- (void)applicationWillEnterForeground {
+    [self fetchAlbumsDataWithReload:YES];
 }
 
 - (PHCachingImageManager *)cachingImageManager {
@@ -70,6 +74,22 @@
         }];
     }
 }
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationWillEnterForegroundNotification object:nil];
+}
+
+#pragma mark - User Action
+
+- (void)albumClickAction:(NSString *)title assetsFetchResult:(PHFetchResult *)assetsFetchResult {
+    FSGridViewController *gridViewController = [[FSGridViewController alloc] initWithConfig:self.config source:self.source];
+    gridViewController.title = title;
+    gridViewController.assetsFetchResult = assetsFetchResult;
+    [self.navigationController pushViewController:gridViewController animated:YES];
+}
+
+#pragma mark - table view delegate
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     return self.albums.count;
@@ -109,11 +129,9 @@
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    FSGridViewController *gridViewController = [[FSGridViewController alloc] initWithConfig:self.config source:self.source];
-    gridViewController.title = self.albums[indexPath.row].localizedTitle;
-    gridViewController.assetsFetchResult = [self fetchAssetsFromCollection:self.albums[indexPath.row]];
-
-    [self.navigationController pushViewController:gridViewController animated:YES];
+    NSString *title = self.albums[indexPath.row].localizedTitle;
+    PHFetchResult *assetsFetchResult = [self fetchAssetsFromCollection:self.albums[indexPath.row]];
+    [self albumClickAction:title assetsFetchResult:assetsFetchResult];
 }
 
 - (void)fetchAlbumsDataWithReload:(BOOL)reload {
